@@ -1,3 +1,3 @@
 # Syncman
 
-Conflict-free auto-merge synchronization protocol
+Conflict-free Synchronization Protocol
