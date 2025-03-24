@@ -165,6 +165,109 @@ mod tests {
         assert_eq!(doc_to_hashmap(&peer2.doc), data);
     }
 
+    #[test]
+    fn three_way_sync() {
+        let mut peer1 = AutomergeSyncman::new(Automerge::new());
+        let mut peer2 = AutomergeSyncman::new(Automerge::new());
+        let mut peer3 = AutomergeSyncman::new(Automerge::new());
+
+        // Populate a doc of each peer: Two unique values for each and one overlapping value
+        let data1 = populate_doc(
+            &mut peer1.doc,
+            vec![
+                ("k-0".to_string(), "v-0".to_string()),
+                ("k-1".to_string(), "v-1".to_string()),
+                ("k-c".to_string(), "v-c".to_string()),
+            ],
+        );
+        let data2 = populate_doc(
+            &mut peer2.doc,
+            vec![
+                ("k-2".to_string(), "v-2".to_string()),
+                ("k-3".to_string(), "v-3".to_string()),
+                ("k-c".to_string(), "v-c".to_string()),
+            ],
+        );
+        let data3 = populate_doc(
+            &mut peer3.doc,
+            vec![
+                ("k-4".to_string(), "v-4".to_string()),
+                ("k-5".to_string(), "v-5".to_string()),
+                ("k-c".to_string(), "v-c".to_string()),
+            ],
+        );
+        let all_data = merge_hashmaps([&data1, &data2, &data3]);
+        assert_eq!(all_data.len(), 7);
+
+        // peer1 is connected to peer2 and peer3.
+        // peer2 is not connected to peer3.
+        // peer1 uses a different sync handle for each connection.
+        //        peer2
+        //       /
+        // peer1
+        //       \
+        //        peer3
+        //
+        // Round 1: peer1 syncs with peer2 and peer3
+        three_way_sync_inner(&mut peer1, &mut peer2, &mut peer3);
+        assert_eq!(doc_to_hashmap(&peer1.doc), all_data);
+        assert_eq!(doc_to_hashmap(&peer2.doc), merge_hashmaps([&data1, &data2]));
+        assert_eq!(doc_to_hashmap(&peer3.doc), merge_hashmaps([&data1, &data3]));
+        // Round 2: peer1 syncs with peer2 and peer3 again
+        // to propagate the changes received from the round 1.
+        three_way_sync_inner(&mut peer1, &mut peer2, &mut peer3);
+        assert_eq!(doc_to_hashmap(&peer1.doc), all_data);
+        assert_eq!(doc_to_hashmap(&peer2.doc), all_data);
+        assert_eq!(doc_to_hashmap(&peer3.doc), all_data);
+    }
+
+    fn three_way_sync_inner(
+        peer1: &mut AutomergeSyncman,
+        peer2: &mut AutomergeSyncman,
+        peer3: &mut AutomergeSyncman,
+    ) {
+        let mut handle1_2 = peer1.initiate_sync();
+        let mut handle1_3 = peer1.initiate_sync();
+        let mut handle2 = peer2.initiate_sync();
+        let mut handle3 = peer3.initiate_sync();
+
+        let msg1 = handle1_2.generate_message();
+        assert!(matches!(msg1, SyncMessage::Sync(_)));
+        peer2.apply_sync(&mut handle2, &msg1);
+        let msg2 = handle2.generate_message();
+        assert!(matches!(msg1, SyncMessage::Sync(_)));
+        let msg1 = handle1_3.generate_message();
+        peer3.apply_sync(&mut handle3, &msg1);
+        let msg3 = handle3.generate_message();
+        assert!(matches!(msg1, SyncMessage::Sync(_)));
+        peer1.apply_sync(&mut handle1_2, &msg2);
+        peer1.apply_sync(&mut handle1_3, &msg3);
+
+        let msg1 = handle1_2.generate_message();
+        assert!(matches!(msg1, SyncMessage::Sync(_)));
+        peer2.apply_sync(&mut handle2, &msg1);
+        let msg2 = handle2.generate_message();
+        assert!(matches!(msg1, SyncMessage::Sync(_)));
+        let msg1 = handle1_3.generate_message();
+        peer3.apply_sync(&mut handle3, &msg1);
+        let msg3 = handle3.generate_message();
+        assert!(matches!(msg1, SyncMessage::Sync(_)));
+        peer1.apply_sync(&mut handle1_2, &msg2);
+        peer1.apply_sync(&mut handle1_3, &msg3);
+
+        let msg1 = handle1_2.generate_message();
+        assert!(matches!(msg1, SyncMessage::Done));
+        peer2.apply_sync(&mut handle2, &msg1);
+        let msg2 = handle2.generate_message();
+        assert!(matches!(msg1, SyncMessage::Done));
+        let msg1 = handle1_3.generate_message();
+        peer3.apply_sync(&mut handle3, &msg1);
+        let msg3 = handle3.generate_message();
+        assert!(matches!(msg1, SyncMessage::Done));
+        peer1.apply_sync(&mut handle1_2, &msg2);
+        peer1.apply_sync(&mut handle1_3, &msg3);
+    }
+
     fn populate_doc(
         doc: &mut Automerge,
         keyvalues: Vec<(String, String)>,
@@ -186,5 +289,15 @@ mod tests {
             map.insert(key, value.to_string());
         }
         map
+    }
+
+    fn merge_hashmaps<'a, I>(maps: I) -> HashMap<String, String>
+    where
+        I: IntoIterator<Item = &'a HashMap<String, String>>,
+    {
+        maps.into_iter().fold(HashMap::new(), |mut acc, map| {
+            acc.extend(map.clone());
+            acc
+        })
     }
 }
