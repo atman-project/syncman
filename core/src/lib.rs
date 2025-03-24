@@ -1,14 +1,17 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
+pub mod automerge;
+
+pub trait Syncman {
+    type Handle: SyncHandle;
+
+    fn initiate_sync(&self) -> Self::Handle;
+    fn apply_sync(&mut self, handle: &mut Self::Handle, msg: &SyncMessage);
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub trait SyncHandle {
+    fn generate_message(&mut self) -> SyncMessage;
+}
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
+pub enum SyncMessage {
+    Sync(Vec<u8>),
+    Done,
 }
