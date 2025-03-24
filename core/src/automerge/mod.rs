@@ -86,15 +86,13 @@ mod tests {
     fn sync_from_empty() {
         let mut peer1 = AutomergeSyncman::new(Automerge::new());
         let mut peer2 = AutomergeSyncman::new(Automerge::new());
-        let mut doc = peer2.doc.fork();
-        let mut tx = doc.transaction();
-        for i in 0..3 {
-            tx.put(automerge::ROOT, format!("k-{i}"), format!("v-{i}"))
-                .unwrap();
-        }
-        tx.commit();
-        peer2.doc.merge(&mut doc).unwrap();
-        let data = doc_to_hashmap(&peer2.doc);
+        let data = populate_doc(
+            &mut peer2.doc,
+            vec![
+                ("k-0".to_string(), "v-0".to_string()),
+                ("k-1".to_string(), "v-1".to_string()),
+            ],
+        );
 
         let mut handle1 = peer1.initiate_sync();
         let mut handle2 = peer2.initiate_sync();
@@ -123,29 +121,23 @@ mod tests {
         let mut peer1 = AutomergeSyncman::new(Automerge::new());
         let mut peer2 = AutomergeSyncman::new(Automerge::new());
 
-        // Populate peer1's doc: Two unique values and one overlapping value
-        let mut doc = peer1.doc.fork();
-        let mut tx = doc.transaction();
-        for i in (0..=3).step_by(2) {
-            tx.put(automerge::ROOT, format!("k-{i}"), format!("v-{i}"))
-                .unwrap();
-        }
-        tx.put(automerge::ROOT, "k-overlap", "v-overlap").unwrap();
-        tx.commit();
-        peer1.doc.merge(&mut doc).unwrap();
-        let mut data = doc_to_hashmap(&peer1.doc);
-
-        // Populate peer2's doc: Two unique values and one overlapping value
-        let mut doc = peer2.doc.fork();
-        let mut tx = doc.transaction();
-        for i in (1..=3).step_by(2) {
-            tx.put(automerge::ROOT, format!("k-{i}"), format!("v-{i}"))
-                .unwrap();
-        }
-        tx.put(automerge::ROOT, "k-overlap", "v-overlap").unwrap();
-        tx.commit();
-        peer2.doc.merge(&mut doc).unwrap();
-        data.extend(doc_to_hashmap(&peer2.doc));
+        // Populate a doc of each peer: Two unique values for each and one overlapping value
+        let mut data = populate_doc(
+            &mut peer1.doc,
+            vec![
+                ("k-0".to_string(), "v-0".to_string()),
+                ("k-2".to_string(), "v-2".to_string()),
+                ("k-c".to_string(), "v-c".to_string()),
+            ],
+        );
+        data.extend(populate_doc(
+            &mut peer2.doc,
+            vec![
+                ("k-1".to_string(), "v-1".to_string()),
+                ("k-3".to_string(), "v-3".to_string()),
+                ("k-c".to_string(), "v-c".to_string()),
+            ],
+        ));
         assert_eq!(data.len(), 5);
 
         let mut handle1 = peer1.initiate_sync();
@@ -171,6 +163,20 @@ mod tests {
 
         assert_eq!(doc_to_hashmap(&peer1.doc), data);
         assert_eq!(doc_to_hashmap(&peer2.doc), data);
+    }
+
+    fn populate_doc(
+        doc: &mut Automerge,
+        keyvalues: Vec<(String, String)>,
+    ) -> HashMap<String, String> {
+        let mut fork = doc.fork();
+        let mut tx = doc.transaction();
+        for (key, value) in keyvalues {
+            tx.put(automerge::ROOT, key, value).unwrap();
+        }
+        tx.commit();
+        doc.merge(&mut fork).unwrap();
+        doc_to_hashmap(doc)
     }
 
     fn doc_to_hashmap(doc: &Automerge) -> HashMap<String, String> {
