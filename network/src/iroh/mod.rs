@@ -63,7 +63,7 @@ impl IrohSyncmanProtocol {
             }
         }
         conn_send.finish()?;
-        conn_send.stopped().await?;
+        let _ = conn_send.stopped().await;
         Ok(())
     }
 
@@ -87,7 +87,7 @@ impl IrohSyncmanProtocol {
             }
         }
         conn_send.finish()?;
-        conn_send.stopped().await?;
+        let _ = conn_send.stopped().await;
         Ok(())
     }
 
