@@ -282,6 +282,7 @@ mod tests {
 
     async fn endpoint() -> Endpoint {
         Endpoint::builder()
+            .relay_mode(iroh::RelayMode::Disabled)
             .bind_addr_v4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0))
             .bind()
             .await
