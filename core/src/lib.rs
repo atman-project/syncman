@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 pub mod automerge;
 
 pub trait Syncman {
@@ -11,6 +13,7 @@ pub trait SyncHandle {
     fn generate_message(&mut self) -> SyncMessage;
 }
 
+#[derive(Serialize, Deserialize, Debug)]
 pub enum SyncMessage {
     Sync(Vec<u8>),
     Done,

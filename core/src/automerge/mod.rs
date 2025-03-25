@@ -5,6 +5,7 @@ use automerge::{
 
 use crate::{SyncHandle, SyncMessage, Syncman};
 
+#[derive(Debug)]
 pub struct AutomergeSyncman {
     doc: Automerge,
 }
@@ -12,6 +13,10 @@ pub struct AutomergeSyncman {
 impl AutomergeSyncman {
     pub fn new(doc: Automerge) -> Self {
         Self { doc }
+    }
+
+    pub fn doc(&self) -> Automerge {
+        self.doc.clone()
     }
 }
 
