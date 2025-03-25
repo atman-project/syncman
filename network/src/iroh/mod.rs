@@ -137,22 +137,14 @@ mod tests {
         let (tx_sync_finished1, mut rx_sync_finished1) = tokio::sync::mpsc::channel(1);
         let protocol1 =
             IrohSyncmanProtocol::new(AutomergeSyncman::new(Automerge::new()), tx_sync_finished1);
-        let iroh1 = Router::builder(endpoint().await)
-            .accept(IrohSyncmanProtocol::ALPN, protocol1.clone())
-            .spawn()
-            .await
-            .unwrap();
+        let iroh1 = spawn_router(protocol1.clone()).await;
         let addr1 = iroh1.endpoint().node_addr().await.unwrap();
         println!("sync_empty_docs: addr1: {addr1:?}");
 
         let (tx_sync_finished2, _) = tokio::sync::mpsc::channel(1);
         let protocol2 =
             IrohSyncmanProtocol::new(AutomergeSyncman::new(Automerge::new()), tx_sync_finished2);
-        let iroh2 = Router::builder(endpoint().await)
-            .accept(IrohSyncmanProtocol::ALPN, protocol2.clone())
-            .spawn()
-            .await
-            .unwrap();
+        let iroh2 = spawn_router(protocol2.clone()).await;
         let conn = iroh2
             .endpoint()
             .connect(addr1, IrohSyncmanProtocol::ALPN)
@@ -183,21 +175,13 @@ mod tests {
 
         let (tx_sync_finished1, mut rx_sync_finished1) = tokio::sync::mpsc::channel(1);
         let protocol1 = IrohSyncmanProtocol::new(AutomergeSyncman::new(doc1), tx_sync_finished1);
-        let iroh1 = Router::builder(endpoint().await)
-            .accept(IrohSyncmanProtocol::ALPN, protocol1.clone())
-            .spawn()
-            .await
-            .unwrap();
+        let iroh1 = spawn_router(protocol1.clone()).await;
         let addr1 = iroh1.endpoint().node_addr().await.unwrap();
         println!("sync_from_empty: addr1: {addr1:?}");
 
         let (tx_sync_finished2, _) = tokio::sync::mpsc::channel(1);
         let protocol2 = IrohSyncmanProtocol::new(AutomergeSyncman::new(doc2), tx_sync_finished2);
-        let iroh2 = Router::builder(endpoint().await)
-            .accept(IrohSyncmanProtocol::ALPN, protocol2.clone())
-            .spawn()
-            .await
-            .unwrap();
+        let iroh2 = spawn_router(protocol2.clone()).await;
         let conn = iroh2
             .endpoint()
             .connect(addr1, IrohSyncmanProtocol::ALPN)
@@ -243,21 +227,13 @@ mod tests {
 
         let (tx_sync_finished1, mut rx_sync_finished1) = tokio::sync::mpsc::channel(1);
         let protocol1 = IrohSyncmanProtocol::new(AutomergeSyncman::new(doc1), tx_sync_finished1);
-        let iroh1 = Router::builder(endpoint().await)
-            .accept(IrohSyncmanProtocol::ALPN, protocol1.clone())
-            .spawn()
-            .await
-            .unwrap();
+        let iroh1 = spawn_router(protocol1.clone()).await;
         let addr1 = iroh1.endpoint().node_addr().await.unwrap();
         println!("addr1: {addr1:?}");
 
         let (tx_sync_finished2, _) = tokio::sync::mpsc::channel(1);
         let protocol2 = IrohSyncmanProtocol::new(AutomergeSyncman::new(doc2), tx_sync_finished2);
-        let iroh2 = Router::builder(endpoint().await)
-            .accept(IrohSyncmanProtocol::ALPN, protocol2.clone())
-            .spawn()
-            .await
-            .unwrap();
+        let iroh2 = spawn_router(protocol2.clone()).await;
         let conn = iroh2
             .endpoint()
             .connect(addr1, IrohSyncmanProtocol::ALPN)
@@ -280,13 +256,19 @@ mod tests {
         );
     }
 
-    async fn endpoint() -> Endpoint {
-        Endpoint::builder()
-            .relay_mode(iroh::RelayMode::Disabled)
-            .bind_addr_v4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0))
-            .bind()
-            .await
-            .unwrap()
+    async fn spawn_router(protocol: IrohSyncmanProtocol) -> Router {
+        Router::builder(
+            Endpoint::builder()
+                .relay_mode(iroh::RelayMode::Disabled)
+                .bind_addr_v4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0))
+                .bind()
+                .await
+                .unwrap(),
+        )
+        .accept(IrohSyncmanProtocol::ALPN, protocol)
+        .spawn()
+        .await
+        .unwrap()
     }
 
     fn populate_doc(
