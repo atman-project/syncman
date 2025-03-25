@@ -122,7 +122,10 @@ impl IrohSyncmanProtocol {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
+    use std::{
+        collections::HashMap,
+        net::{Ipv4Addr, SocketAddrV4},
+    };
 
     use automerge::{transaction::Transactable, Automerge, ReadDoc};
     use iroh::{protocol::Router, Endpoint};
@@ -134,17 +137,18 @@ mod tests {
         let (tx_sync_finished1, mut rx_sync_finished1) = tokio::sync::mpsc::channel(1);
         let protocol1 =
             IrohSyncmanProtocol::new(AutomergeSyncman::new(Automerge::new()), tx_sync_finished1);
-        let iroh1 = Router::builder(Endpoint::builder().bind().await.unwrap())
+        let iroh1 = Router::builder(endpoint().await)
             .accept(IrohSyncmanProtocol::ALPN, protocol1.clone())
             .spawn()
             .await
             .unwrap();
         let addr1 = iroh1.endpoint().node_addr().await.unwrap();
+        println!("sync_empty_docs: addr1: {addr1:?}");
 
         let (tx_sync_finished2, _) = tokio::sync::mpsc::channel(1);
         let protocol2 =
             IrohSyncmanProtocol::new(AutomergeSyncman::new(Automerge::new()), tx_sync_finished2);
-        let iroh2 = Router::builder(Endpoint::builder().bind().await.unwrap())
+        let iroh2 = Router::builder(endpoint().await)
             .accept(IrohSyncmanProtocol::ALPN, protocol2.clone())
             .spawn()
             .await
@@ -179,16 +183,17 @@ mod tests {
 
         let (tx_sync_finished1, mut rx_sync_finished1) = tokio::sync::mpsc::channel(1);
         let protocol1 = IrohSyncmanProtocol::new(AutomergeSyncman::new(doc1), tx_sync_finished1);
-        let iroh1 = Router::builder(Endpoint::builder().bind().await.unwrap())
+        let iroh1 = Router::builder(endpoint().await)
             .accept(IrohSyncmanProtocol::ALPN, protocol1.clone())
             .spawn()
             .await
             .unwrap();
         let addr1 = iroh1.endpoint().node_addr().await.unwrap();
+        println!("sync_from_empty: addr1: {addr1:?}");
 
         let (tx_sync_finished2, _) = tokio::sync::mpsc::channel(1);
         let protocol2 = IrohSyncmanProtocol::new(AutomergeSyncman::new(doc2), tx_sync_finished2);
-        let iroh2 = Router::builder(Endpoint::builder().bind().await.unwrap())
+        let iroh2 = Router::builder(endpoint().await)
             .accept(IrohSyncmanProtocol::ALPN, protocol2.clone())
             .spawn()
             .await
@@ -238,16 +243,17 @@ mod tests {
 
         let (tx_sync_finished1, mut rx_sync_finished1) = tokio::sync::mpsc::channel(1);
         let protocol1 = IrohSyncmanProtocol::new(AutomergeSyncman::new(doc1), tx_sync_finished1);
-        let iroh1 = Router::builder(Endpoint::builder().bind().await.unwrap())
+        let iroh1 = Router::builder(endpoint().await)
             .accept(IrohSyncmanProtocol::ALPN, protocol1.clone())
             .spawn()
             .await
             .unwrap();
         let addr1 = iroh1.endpoint().node_addr().await.unwrap();
+        println!("addr1: {addr1:?}");
 
         let (tx_sync_finished2, _) = tokio::sync::mpsc::channel(1);
         let protocol2 = IrohSyncmanProtocol::new(AutomergeSyncman::new(doc2), tx_sync_finished2);
-        let iroh2 = Router::builder(Endpoint::builder().bind().await.unwrap())
+        let iroh2 = Router::builder(endpoint().await)
             .accept(IrohSyncmanProtocol::ALPN, protocol2.clone())
             .spawn()
             .await
@@ -272,6 +278,14 @@ mod tests {
             doc_to_hashmap(&protocol2.syncman.lock().unwrap().doc()),
             data
         );
+    }
+
+    async fn endpoint() -> Endpoint {
+        Endpoint::builder()
+            .bind_addr_v4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0))
+            .bind()
+            .await
+            .unwrap()
     }
 
     fn populate_doc(
