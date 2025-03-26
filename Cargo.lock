@@ -3515,7 +3515,6 @@ name = "syncman"
 version = "0.1.0"
 dependencies = [
  "automerge",
- "serde",
 ]
 
 [[package]]
@@ -3527,6 +3526,7 @@ dependencies = [
  "automerge",
  "bincode",
  "iroh",
+ "serde",
  "syncman",
  "tokio",
 ]

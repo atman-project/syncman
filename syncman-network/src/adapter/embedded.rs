@@ -34,7 +34,7 @@ where
         self.syncman.lock().unwrap().initiate_sync()
     }
 
-    async fn apply_sync(&self, handle: &mut <S as Syncman>::Handle, msg: &syncman::SyncMessage) {
+    async fn apply_sync(&self, handle: &mut <S as Syncman>::Handle, msg: &[u8]) {
         self.syncman.lock().unwrap().apply_sync(handle, msg)
     }
 

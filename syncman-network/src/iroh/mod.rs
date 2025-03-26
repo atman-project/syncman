@@ -5,10 +5,10 @@ use iroh::{
     endpoint::{Connection, RecvStream, SendStream},
     protocol::ProtocolHandler,
 };
-use syncman::{SyncHandle, SyncMessage, Syncman};
+use syncman::{SyncHandle, Syncman};
 use tokio::sync::mpsc;
 
-use crate::adapter::SyncmanAdapter;
+use crate::{adapter::SyncmanAdapter, SyncMessage};
 
 pub struct IrohSyncmanProtocol<S, A>
 where
@@ -85,15 +85,20 @@ where
         let mut is_remote_done = false;
         while !is_local_done || !is_remote_done {
             if !is_local_done {
-                let msg = handle.generate_message();
+                let msg: SyncMessage = handle.generate_message().into();
                 Self::send_msg(&msg, &mut conn_send).await?;
                 is_local_done = matches!(msg, SyncMessage::Done);
             }
 
             if !is_remote_done {
-                let msg = Self::recv_msg(&mut conn_recv).await?;
-                self.adapter.apply_sync(&mut handle, &msg).await;
-                is_remote_done = matches!(msg, SyncMessage::Done);
+                match Self::recv_msg(&mut conn_recv).await? {
+                    SyncMessage::Sync(msg) => {
+                        self.adapter.apply_sync(&mut handle, &msg).await;
+                    }
+                    SyncMessage::Done => {
+                        is_remote_done = true;
+                    }
+                };
             }
         }
         conn_send.finish()?;
@@ -109,13 +114,18 @@ where
         let mut is_remote_done = false;
         while !is_local_done || !is_remote_done {
             if !is_remote_done {
-                let msg = Self::recv_msg(&mut conn_recv).await?;
-                self.adapter.apply_sync(&mut handle, &msg).await;
-                is_remote_done = matches!(msg, SyncMessage::Done);
+                match Self::recv_msg(&mut conn_recv).await? {
+                    SyncMessage::Sync(msg) => {
+                        self.adapter.apply_sync(&mut handle, &msg).await;
+                    }
+                    SyncMessage::Done => {
+                        is_remote_done = true;
+                    }
+                };
             }
 
             if !is_local_done {
-                let msg = handle.generate_message();
+                let msg: SyncMessage = handle.generate_message().into();
                 Self::send_msg(&msg, &mut conn_send).await?;
                 is_local_done = matches!(msg, SyncMessage::Done);
             }
