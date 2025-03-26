@@ -5,7 +5,7 @@ use automerge::{
     Automerge, ReadDoc,
 };
 
-use crate::{SyncHandle, SyncMessage, Syncman};
+use crate::{SyncHandle, Syncman};
 
 #[derive(Debug)]
 pub struct AutomergeSyncman {
@@ -28,15 +28,13 @@ impl Syncman for AutomergeSyncman {
         }
     }
 
-    fn apply_sync(&mut self, handle: &mut Self::Handle, msg: &SyncMessage) {
-        if let SyncMessage::Sync(msg) = msg {
-            let msg = sync::Message::decode(msg).unwrap();
-            handle
-                .doc
-                .receive_sync_message(&mut handle.sync_state, msg)
-                .unwrap();
-            self.doc.merge(&mut handle.doc).unwrap();
-        }
+    fn apply_sync(&mut self, handle: &mut Self::Handle, msg: &[u8]) {
+        let msg = sync::Message::decode(msg).unwrap();
+        handle
+            .doc
+            .receive_sync_message(&mut handle.sync_state, msg)
+            .unwrap();
+        self.doc.merge(&mut handle.doc).unwrap();
     }
 
     fn dump(&self) -> HashMap<String, String> {
@@ -55,11 +53,10 @@ pub struct AutomergeSyncHandle {
 }
 
 impl SyncHandle for AutomergeSyncHandle {
-    fn generate_message(&mut self) -> SyncMessage {
-        match self.doc.generate_sync_message(&mut self.sync_state) {
-            Some(msg) => SyncMessage::Sync(msg.encode()),
-            None => SyncMessage::Done,
-        }
+    fn generate_message(&mut self) -> Option<Vec<u8>> {
+        self.doc
+            .generate_sync_message(&mut self.sync_state)
+            .map(|msg| msg.encode())
     }
 }
 
@@ -78,17 +75,10 @@ mod tests {
         let mut handle1 = peer1.initiate_sync();
         let mut handle2 = peer2.initiate_sync();
 
-        let msg = handle1.generate_message();
-        assert!(matches!(msg, SyncMessage::Sync(_)));
-        peer2.apply_sync(&mut handle2, &msg);
-        let msg = handle2.generate_message();
-        assert!(matches!(msg, SyncMessage::Sync(_)));
-        peer1.apply_sync(&mut handle1, &msg);
-        let msg = handle1.generate_message();
-        assert!(matches!(msg, SyncMessage::Done));
-        peer2.apply_sync(&mut handle2, &msg);
-        let msg = handle2.generate_message();
-        assert!(matches!(msg, SyncMessage::Done));
+        peer2.apply_sync(&mut handle2, &handle1.generate_message().unwrap());
+        peer1.apply_sync(&mut handle1, &handle2.generate_message().unwrap());
+        assert!(handle1.generate_message().is_none());
+        assert!(handle2.generate_message().is_none());
 
         assert!(peer1.doc.is_empty());
         assert!(peer2.doc.is_empty());
@@ -109,20 +99,11 @@ mod tests {
         let mut handle1 = peer1.initiate_sync();
         let mut handle2 = peer2.initiate_sync();
 
-        let msg = handle1.generate_message();
-        assert!(matches!(msg, SyncMessage::Sync(_)));
-        peer2.apply_sync(&mut handle2, &msg);
-        let msg = handle2.generate_message();
-        assert!(matches!(msg, SyncMessage::Sync(_)));
-        peer1.apply_sync(&mut handle1, &msg);
-        let msg = handle1.generate_message();
-        assert!(matches!(msg, SyncMessage::Sync(_)));
-        peer2.apply_sync(&mut handle2, &msg);
-        let msg = handle2.generate_message();
-        assert!(matches!(msg, SyncMessage::Done));
-        peer1.apply_sync(&mut handle1, &msg);
-        let msg = handle1.generate_message();
-        assert!(matches!(msg, SyncMessage::Done));
+        peer2.apply_sync(&mut handle2, &handle1.generate_message().unwrap());
+        peer1.apply_sync(&mut handle1, &handle2.generate_message().unwrap());
+        peer2.apply_sync(&mut handle2, &handle1.generate_message().unwrap());
+        assert!(handle2.generate_message().is_none());
+        assert!(handle1.generate_message().is_none());
 
         assert_eq!(doc_to_hashmap(&peer1.doc), data);
         assert_eq!(doc_to_hashmap(&peer2.doc), data);
@@ -155,23 +136,12 @@ mod tests {
         let mut handle1 = peer1.initiate_sync();
         let mut handle2 = peer2.initiate_sync();
 
-        let msg = handle1.generate_message();
-        assert!(matches!(msg, SyncMessage::Sync(_)));
-        peer2.apply_sync(&mut handle2, &msg);
-        let msg = handle2.generate_message();
-        assert!(matches!(msg, SyncMessage::Sync(_)));
-        peer1.apply_sync(&mut handle1, &msg);
-        let msg = handle1.generate_message();
-        assert!(matches!(msg, SyncMessage::Sync(_)));
-        peer2.apply_sync(&mut handle2, &msg);
-        let msg = handle2.generate_message();
-        assert!(matches!(msg, SyncMessage::Sync(_)));
-        peer1.apply_sync(&mut handle1, &msg);
-        let msg = handle1.generate_message();
-        assert!(matches!(msg, SyncMessage::Done));
-        peer2.apply_sync(&mut handle2, &msg);
-        let msg = handle2.generate_message();
-        assert!(matches!(msg, SyncMessage::Done));
+        peer2.apply_sync(&mut handle2, &handle1.generate_message().unwrap());
+        peer1.apply_sync(&mut handle1, &handle2.generate_message().unwrap());
+        peer2.apply_sync(&mut handle2, &handle1.generate_message().unwrap());
+        peer1.apply_sync(&mut handle1, &handle2.generate_message().unwrap());
+        assert!(handle1.generate_message().is_none());
+        assert!(handle2.generate_message().is_none());
 
         assert_eq!(doc_to_hashmap(&peer1.doc), data);
         assert_eq!(doc_to_hashmap(&peer2.doc), data);
@@ -243,41 +213,20 @@ mod tests {
         let mut handle2 = peer2.initiate_sync();
         let mut handle3 = peer3.initiate_sync();
 
-        let msg1 = handle1_2.generate_message();
-        assert!(matches!(msg1, SyncMessage::Sync(_)));
-        peer2.apply_sync(&mut handle2, &msg1);
-        let msg2 = handle2.generate_message();
-        assert!(matches!(msg1, SyncMessage::Sync(_)));
-        let msg1 = handle1_3.generate_message();
-        peer3.apply_sync(&mut handle3, &msg1);
-        let msg3 = handle3.generate_message();
-        assert!(matches!(msg1, SyncMessage::Sync(_)));
-        peer1.apply_sync(&mut handle1_2, &msg2);
-        peer1.apply_sync(&mut handle1_3, &msg3);
+        peer2.apply_sync(&mut handle2, &handle1_2.generate_message().unwrap());
+        peer3.apply_sync(&mut handle3, &handle1_3.generate_message().unwrap());
+        peer1.apply_sync(&mut handle1_2, &handle2.generate_message().unwrap());
+        peer1.apply_sync(&mut handle1_3, &handle3.generate_message().unwrap());
 
-        let msg1 = handle1_2.generate_message();
-        assert!(matches!(msg1, SyncMessage::Sync(_)));
-        peer2.apply_sync(&mut handle2, &msg1);
-        let msg2 = handle2.generate_message();
-        assert!(matches!(msg1, SyncMessage::Sync(_)));
-        let msg1 = handle1_3.generate_message();
-        peer3.apply_sync(&mut handle3, &msg1);
-        let msg3 = handle3.generate_message();
-        assert!(matches!(msg1, SyncMessage::Sync(_)));
-        peer1.apply_sync(&mut handle1_2, &msg2);
-        peer1.apply_sync(&mut handle1_3, &msg3);
+        peer2.apply_sync(&mut handle2, &handle1_2.generate_message().unwrap());
+        peer3.apply_sync(&mut handle3, &handle1_3.generate_message().unwrap());
+        peer1.apply_sync(&mut handle1_2, &handle2.generate_message().unwrap());
+        peer1.apply_sync(&mut handle1_3, &handle3.generate_message().unwrap());
 
-        let msg1 = handle1_2.generate_message();
-        assert!(matches!(msg1, SyncMessage::Done));
-        peer2.apply_sync(&mut handle2, &msg1);
-        let msg2 = handle2.generate_message();
-        assert!(matches!(msg1, SyncMessage::Done));
-        let msg1 = handle1_3.generate_message();
-        peer3.apply_sync(&mut handle3, &msg1);
-        let msg3 = handle3.generate_message();
-        assert!(matches!(msg1, SyncMessage::Done));
-        peer1.apply_sync(&mut handle1_2, &msg2);
-        peer1.apply_sync(&mut handle1_3, &msg3);
+        assert!(handle1_2.generate_message().is_none());
+        assert!(handle1_3.generate_message().is_none());
+        assert!(handle2.generate_message().is_none());
+        assert!(handle3.generate_message().is_none());
     }
 
     fn populate_doc(
