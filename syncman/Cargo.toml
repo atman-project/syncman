@@ -1,7 +1,13 @@
 [package]
 name = "syncman"
 version = "0.1.0"
+authors = ["Youngjoon Lee"]
 edition = "2021"
+license = "Apache-2.0"
+description = "Conflict-free Synchronization Library"
+homepage = "https://github.com/atman-project"
+repository = "https://github.com/atman-project/syncman"
+readme = "README.md"
 
 [dependencies]
 automerge = "0.6"

@@ -1,14 +1,20 @@
 [package]
 name = "syncman-network"
 version = "0.1.0"
+authors = ["Youngjoon Lee"]
 edition = "2021"
+license = "Apache-2.0"
+description = "Conflict-free Synchronization Library - Network Modules"
+homepage = "https://github.com/atman-project"
+repository = "https://github.com/atman-project/syncman"
+readme = "README.md"
 
 [dependencies]
 anyhow = "1"
 async-trait = "0.1"
 bincode = "1"
 iroh = "0.34"
-syncman = { path = "../syncman" }
+syncman = "0.1"
 tokio = "1"
 
 [dev-dependencies]
