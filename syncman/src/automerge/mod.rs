@@ -72,13 +72,8 @@ mod tests {
     fn empty_docs() {
         let mut peer1 = AutomergeSyncman::new(Automerge::new());
         let mut peer2 = AutomergeSyncman::new(Automerge::new());
-        let mut handle1 = peer1.initiate_sync();
-        let mut handle2 = peer2.initiate_sync();
 
-        peer2.apply_sync(&mut handle2, &handle1.generate_message().unwrap());
-        peer1.apply_sync(&mut handle1, &handle2.generate_message().unwrap());
-        assert!(handle1.generate_message().is_none());
-        assert!(handle2.generate_message().is_none());
+        sync(&mut peer1, &mut peer2);
 
         assert!(peer1.doc.is_empty());
         assert!(peer2.doc.is_empty());
@@ -96,17 +91,10 @@ mod tests {
             ],
         );
 
-        let mut handle1 = peer1.initiate_sync();
-        let mut handle2 = peer2.initiate_sync();
+        sync(&mut peer1, &mut peer2);
 
-        peer2.apply_sync(&mut handle2, &handle1.generate_message().unwrap());
-        peer1.apply_sync(&mut handle1, &handle2.generate_message().unwrap());
-        peer2.apply_sync(&mut handle2, &handle1.generate_message().unwrap());
-        assert!(handle2.generate_message().is_none());
-        assert!(handle1.generate_message().is_none());
-
-        assert_eq!(doc_to_hashmap(&peer1.doc), data);
-        assert_eq!(doc_to_hashmap(&peer2.doc), data);
+        assert_eq!(peer1.dump(), data);
+        assert_eq!(peer2.dump(), data);
     }
 
     #[test]
@@ -133,18 +121,10 @@ mod tests {
         ));
         assert_eq!(data.len(), 5);
 
-        let mut handle1 = peer1.initiate_sync();
-        let mut handle2 = peer2.initiate_sync();
+        sync(&mut peer1, &mut peer2);
 
-        peer2.apply_sync(&mut handle2, &handle1.generate_message().unwrap());
-        peer1.apply_sync(&mut handle1, &handle2.generate_message().unwrap());
-        peer2.apply_sync(&mut handle2, &handle1.generate_message().unwrap());
-        peer1.apply_sync(&mut handle1, &handle2.generate_message().unwrap());
-        assert!(handle1.generate_message().is_none());
-        assert!(handle2.generate_message().is_none());
-
-        assert_eq!(doc_to_hashmap(&peer1.doc), data);
-        assert_eq!(doc_to_hashmap(&peer2.doc), data);
+        assert_eq!(peer1.dump(), data);
+        assert_eq!(peer2.dump(), data);
     }
 
     #[test]
@@ -183,50 +163,117 @@ mod tests {
 
         // peer1 is connected to peer2 and peer3.
         // peer2 is not connected to peer3.
+        three_way_sync_single_round(&mut peer1, &mut peer2, &mut peer3);
+        // Round 1: peer1 syncs with peer2 and peer3
+        assert_eq!(peer1.dump(), all_data);
+        assert_eq!(peer2.dump(), merge_hashmaps([&data1, &data2]));
+        assert_eq!(peer3.dump(), merge_hashmaps([&data1, &data3]));
+        // Round 2: peer1 syncs with peer2 and peer3 again
+        // to propagate the changes received from the round 1.
+        three_way_sync_single_round(&mut peer1, &mut peer2, &mut peer3);
+        assert_eq!(peer1.dump(), all_data);
+        assert_eq!(peer2.dump(), all_data);
+        assert_eq!(peer3.dump(), all_data);
+    }
+
+    fn sync(peer1: &mut AutomergeSyncman, peer2: &mut AutomergeSyncman) {
+        let mut handle1 = peer1.initiate_sync();
+        let mut handle2 = peer2.initiate_sync();
+
+        let mut done1 = false;
+        let mut done2 = false;
+        while !(done1 && done2) {
+            if !done1 {
+                match handle1.generate_message() {
+                    Some(msg) => {
+                        peer2.apply_sync(&mut handle2, &msg);
+                    }
+                    None => {
+                        done1 = true;
+                    }
+                }
+            }
+
+            if !done2 {
+                match handle2.generate_message() {
+                    Some(msg) => {
+                        peer1.apply_sync(&mut handle1, &msg);
+                    }
+                    None => {
+                        done2 = true;
+                    }
+                }
+            }
+        }
+    }
+
+    fn three_way_sync_single_round(
+        peer1: &mut AutomergeSyncman,
+        peer2: &mut AutomergeSyncman,
+        peer3: &mut AutomergeSyncman,
+    ) {
+        // peer1 is connected to peer2 and peer3.
+        // peer2 is not connected to peer3.
         // peer1 uses a different sync handle for each connection.
         //        peer2
         //       /
         // peer1
         //       \
         //        peer3
-        //
-        // Round 1: peer1 syncs with peer2 and peer3
-        three_way_sync_inner(&mut peer1, &mut peer2, &mut peer3);
-        assert_eq!(doc_to_hashmap(&peer1.doc), all_data);
-        assert_eq!(doc_to_hashmap(&peer2.doc), merge_hashmaps([&data1, &data2]));
-        assert_eq!(doc_to_hashmap(&peer3.doc), merge_hashmaps([&data1, &data3]));
-        // Round 2: peer1 syncs with peer2 and peer3 again
-        // to propagate the changes received from the round 1.
-        three_way_sync_inner(&mut peer1, &mut peer2, &mut peer3);
-        assert_eq!(doc_to_hashmap(&peer1.doc), all_data);
-        assert_eq!(doc_to_hashmap(&peer2.doc), all_data);
-        assert_eq!(doc_to_hashmap(&peer3.doc), all_data);
-    }
-
-    fn three_way_sync_inner(
-        peer1: &mut AutomergeSyncman,
-        peer2: &mut AutomergeSyncman,
-        peer3: &mut AutomergeSyncman,
-    ) {
         let mut handle1_2 = peer1.initiate_sync();
         let mut handle1_3 = peer1.initiate_sync();
         let mut handle2 = peer2.initiate_sync();
         let mut handle3 = peer3.initiate_sync();
 
-        peer2.apply_sync(&mut handle2, &handle1_2.generate_message().unwrap());
-        peer3.apply_sync(&mut handle3, &handle1_3.generate_message().unwrap());
-        peer1.apply_sync(&mut handle1_2, &handle2.generate_message().unwrap());
-        peer1.apply_sync(&mut handle1_3, &handle3.generate_message().unwrap());
+        let mut done1_2 = false;
+        let mut done1_3 = false;
+        let mut done2 = false;
+        let mut done3 = false;
+        while !(done1_2 && done1_3 && done2 && done3) {
+            if !done1_2 {
+                match handle1_2.generate_message() {
+                    Some(msg) => {
+                        peer2.apply_sync(&mut handle2, &msg);
+                    }
+                    None => {
+                        done1_2 = true;
+                    }
+                }
+            }
 
-        peer2.apply_sync(&mut handle2, &handle1_2.generate_message().unwrap());
-        peer3.apply_sync(&mut handle3, &handle1_3.generate_message().unwrap());
-        peer1.apply_sync(&mut handle1_2, &handle2.generate_message().unwrap());
-        peer1.apply_sync(&mut handle1_3, &handle3.generate_message().unwrap());
+            if !done1_3 {
+                match handle1_3.generate_message() {
+                    Some(msg) => {
+                        peer3.apply_sync(&mut handle3, &msg);
+                    }
+                    None => {
+                        done1_3 = true;
+                    }
+                }
+            }
 
-        assert!(handle1_2.generate_message().is_none());
-        assert!(handle1_3.generate_message().is_none());
-        assert!(handle2.generate_message().is_none());
-        assert!(handle3.generate_message().is_none());
+            if !done2 {
+                match handle2.generate_message() {
+                    Some(msg) => {
+                        peer1.apply_sync(&mut handle1_2, &msg);
+                    }
+                    None => {
+                        done2 = true;
+                    }
+                }
+            }
+
+            if !done3 {
+                match handle3.generate_message() {
+                    Some(msg) => {
+                        peer1.apply_sync(&mut handle1_3, &msg);
+                    }
+                    None => {
+                        done3 = true;
+                    }
+                }
+            }
+        }
     }
 
     fn populate_doc(
@@ -240,10 +287,8 @@ mod tests {
         }
         tx.commit();
         doc.merge(&mut fork).unwrap();
-        doc_to_hashmap(doc)
-    }
 
-    fn doc_to_hashmap(doc: &Automerge) -> HashMap<String, String> {
+        // Return the key-value pairs as a hashmap
         let mut map = HashMap::new();
         for key in doc.keys(automerge::ROOT).collect::<Vec<_>>() {
             let (value, _) = doc.get(automerge::ROOT, &key).unwrap().unwrap();
