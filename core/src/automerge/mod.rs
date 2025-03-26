@@ -1,6 +1,8 @@
+use std::collections::HashMap;
+
 use automerge::{
     sync::{self, SyncDoc},
-    Automerge,
+    Automerge, ReadDoc,
 };
 
 use crate::{SyncHandle, SyncMessage, Syncman};
@@ -13,10 +15,6 @@ pub struct AutomergeSyncman {
 impl AutomergeSyncman {
     pub fn new(doc: Automerge) -> Self {
         Self { doc }
-    }
-
-    pub fn doc(&self) -> Automerge {
-        self.doc.clone()
     }
 }
 
@@ -39,6 +37,15 @@ impl Syncman for AutomergeSyncman {
                 .unwrap();
             self.doc.merge(&mut handle.doc).unwrap();
         }
+    }
+
+    fn dump(&self) -> HashMap<String, String> {
+        let mut map = HashMap::new();
+        for key in self.doc.keys(automerge::ROOT).collect::<Vec<_>>() {
+            let (value, _) = self.doc.get(automerge::ROOT, &key).unwrap().unwrap();
+            map.insert(key, value.to_string());
+        }
+        map
     }
 }
 

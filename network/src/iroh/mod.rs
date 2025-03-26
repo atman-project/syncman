@@ -1,26 +1,55 @@
-use std::{
-    future::Future,
-    pin::Pin,
-    sync::{Arc, Mutex},
-};
+use std::{fmt::Formatter, future::Future, pin::Pin};
 
 use anyhow::Ok;
 use iroh::{
     endpoint::{Connection, RecvStream, SendStream},
     protocol::ProtocolHandler,
 };
-use syncman::{automerge::AutomergeSyncman, SyncHandle, SyncMessage, Syncman};
+use syncman::{SyncHandle, SyncMessage, Syncman};
 use tokio::sync::mpsc;
 
-#[derive(Debug, Clone)]
-pub struct IrohSyncmanProtocol {
-    // TODO: do not embed this here. get it from somewhere
-    // TODO: use a generic instead of AutomergeSyncman
-    syncman: Arc<Mutex<AutomergeSyncman>>,
+use crate::adapter::SyncmanAdapter;
+
+pub struct IrohSyncmanProtocol<S, A>
+where
+    S: Syncman,
+    A: SyncmanAdapter<S>,
+{
+    adapter: A,
     sync_finished: mpsc::Sender<()>,
+    _syncman: std::marker::PhantomData<S>,
 }
 
-impl ProtocolHandler for IrohSyncmanProtocol {
+impl<S, A> Clone for IrohSyncmanProtocol<S, A>
+where
+    S: Syncman,
+    A: SyncmanAdapter<S>,
+{
+    fn clone(&self) -> Self {
+        Self {
+            adapter: self.adapter.clone(),
+            sync_finished: self.sync_finished.clone(),
+            _syncman: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<S, A> std::fmt::Debug for IrohSyncmanProtocol<S, A>
+where
+    S: Syncman,
+    A: SyncmanAdapter<S>,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("IrohSyncmanProtocol").finish()
+    }
+}
+
+impl<S, A> ProtocolHandler for IrohSyncmanProtocol<S, A>
+where
+    S: Syncman + Send + Sync + 'static,
+    S::Handle: Send + Sync + 'static,
+    A: SyncmanAdapter<S> + Clone + Send + Sync + 'static,
+{
     fn accept(
         &self,
         conn: Connection,
@@ -34,19 +63,24 @@ impl ProtocolHandler for IrohSyncmanProtocol {
     }
 }
 
-impl IrohSyncmanProtocol {
-    pub const ALPN: &'static [u8] = b"atman/syncman/1";
+pub const IROH_SYNCMAN_ALPN: &[u8] = b"atman/syncman/1";
 
-    pub fn new(syncman: AutomergeSyncman, sync_finished: mpsc::Sender<()>) -> Self {
+impl<S, A> IrohSyncmanProtocol<S, A>
+where
+    S: Syncman,
+    A: SyncmanAdapter<S>,
+{
+    pub fn new(adapter: A, sync_finished: mpsc::Sender<()>) -> Self {
         Self {
-            syncman: Arc::new(Mutex::new(syncman)),
+            adapter,
             sync_finished,
+            _syncman: std::marker::PhantomData,
         }
     }
 
     pub async fn initiate_sync(&self, conn: Connection) -> anyhow::Result<()> {
         let (mut conn_send, mut conn_recv) = conn.open_bi().await?;
-        let mut handle = self.open_sync_handle();
+        let mut handle = self.adapter.open_sync_handle().await;
         let mut is_local_done = false;
         let mut is_remote_done = false;
         while !is_local_done || !is_remote_done {
@@ -58,7 +92,7 @@ impl IrohSyncmanProtocol {
 
             if !is_remote_done {
                 let msg = Self::recv_msg(&mut conn_recv).await?;
-                self.apply_sync(&mut handle, &msg);
+                self.adapter.apply_sync(&mut handle, &msg).await;
                 is_remote_done = matches!(msg, SyncMessage::Done);
             }
         }
@@ -70,13 +104,13 @@ impl IrohSyncmanProtocol {
     async fn respond_sync(&self, conn: Connection) -> anyhow::Result<()> {
         let (mut conn_send, mut conn_recv) = conn.accept_bi().await?;
 
-        let mut handle = self.open_sync_handle();
+        let mut handle = self.adapter.open_sync_handle().await;
         let mut is_local_done = false;
         let mut is_remote_done = false;
         while !is_local_done || !is_remote_done {
             if !is_remote_done {
                 let msg = Self::recv_msg(&mut conn_recv).await?;
-                self.apply_sync(&mut handle, &msg);
+                self.adapter.apply_sync(&mut handle, &msg).await;
                 is_remote_done = matches!(msg, SyncMessage::Done);
             }
 
@@ -89,16 +123,6 @@ impl IrohSyncmanProtocol {
         conn_send.finish()?;
         let _ = conn_send.stopped().await;
         Ok(())
-    }
-
-    fn open_sync_handle(&self) -> <AutomergeSyncman as Syncman>::Handle {
-        let syncman = self.syncman.lock().unwrap();
-        syncman.initiate_sync()
-    }
-
-    fn apply_sync(&self, handle: &mut <AutomergeSyncman as Syncman>::Handle, msg: &SyncMessage) {
-        let mut syncman = self.syncman.lock().unwrap();
-        syncman.apply_sync(handle, msg);
     }
 
     async fn send_msg(msg: &SyncMessage, send: &mut SendStream) -> anyhow::Result<()> {
@@ -129,25 +153,26 @@ mod tests {
 
     use automerge::{transaction::Transactable, Automerge, ReadDoc};
     use iroh::{protocol::Router, Endpoint};
+    use syncman::automerge::AutomergeSyncman;
+
+    use crate::adapter::embedded::EmbeddedSyncmanAdapter;
 
     use super::*;
 
     #[tokio::test]
     async fn sync_empty_docs() {
         let (tx_sync_finished1, mut rx_sync_finished1) = tokio::sync::mpsc::channel(1);
-        let protocol1 =
-            IrohSyncmanProtocol::new(AutomergeSyncman::new(Automerge::new()), tx_sync_finished1);
+        let protocol1 = create_protocol(Automerge::new(), tx_sync_finished1);
         let iroh1 = spawn_router(protocol1.clone()).await;
         let addr1 = iroh1.endpoint().node_addr().await.unwrap();
         println!("sync_empty_docs: addr1: {addr1:?}");
 
         let (tx_sync_finished2, _) = tokio::sync::mpsc::channel(1);
-        let protocol2 =
-            IrohSyncmanProtocol::new(AutomergeSyncman::new(Automerge::new()), tx_sync_finished2);
+        let protocol2 = create_protocol(Automerge::new(), tx_sync_finished2);
         let iroh2 = spawn_router(protocol2.clone()).await;
         let conn = iroh2
             .endpoint()
-            .connect(addr1, IrohSyncmanProtocol::ALPN)
+            .connect(addr1, IROH_SYNCMAN_ALPN)
             .await
             .unwrap();
 
@@ -157,8 +182,8 @@ mod tests {
         iroh1.shutdown().await.unwrap();
         iroh2.shutdown().await.unwrap();
 
-        assert!(doc_to_hashmap(&protocol1.syncman.lock().unwrap().doc()).is_empty());
-        assert!(doc_to_hashmap(&protocol2.syncman.lock().unwrap().doc()).is_empty());
+        assert!(protocol1.adapter.dump().await.is_empty());
+        assert!(protocol2.adapter.dump().await.is_empty());
     }
 
     #[tokio::test]
@@ -174,17 +199,17 @@ mod tests {
         );
 
         let (tx_sync_finished1, mut rx_sync_finished1) = tokio::sync::mpsc::channel(1);
-        let protocol1 = IrohSyncmanProtocol::new(AutomergeSyncman::new(doc1), tx_sync_finished1);
+        let protocol1 = create_protocol(doc1, tx_sync_finished1);
         let iroh1 = spawn_router(protocol1.clone()).await;
         let addr1 = iroh1.endpoint().node_addr().await.unwrap();
         println!("sync_from_empty: addr1: {addr1:?}");
 
         let (tx_sync_finished2, _) = tokio::sync::mpsc::channel(1);
-        let protocol2 = IrohSyncmanProtocol::new(AutomergeSyncman::new(doc2), tx_sync_finished2);
+        let protocol2 = create_protocol(doc2, tx_sync_finished2);
         let iroh2 = spawn_router(protocol2.clone()).await;
         let conn = iroh2
             .endpoint()
-            .connect(addr1, IrohSyncmanProtocol::ALPN)
+            .connect(addr1, IROH_SYNCMAN_ALPN)
             .await
             .unwrap();
 
@@ -194,14 +219,8 @@ mod tests {
         iroh1.shutdown().await.unwrap();
         iroh2.shutdown().await.unwrap();
 
-        assert_eq!(
-            doc_to_hashmap(&protocol1.syncman.lock().unwrap().doc()),
-            data
-        );
-        assert_eq!(
-            doc_to_hashmap(&protocol2.syncman.lock().unwrap().doc()),
-            data
-        );
+        assert_eq!(protocol1.adapter.dump().await, data);
+        assert_eq!(protocol2.adapter.dump().await, data);
     }
 
     #[tokio::test]
@@ -226,17 +245,17 @@ mod tests {
         ));
 
         let (tx_sync_finished1, mut rx_sync_finished1) = tokio::sync::mpsc::channel(1);
-        let protocol1 = IrohSyncmanProtocol::new(AutomergeSyncman::new(doc1), tx_sync_finished1);
+        let protocol1 = create_protocol(doc1, tx_sync_finished1);
         let iroh1 = spawn_router(protocol1.clone()).await;
         let addr1 = iroh1.endpoint().node_addr().await.unwrap();
         println!("addr1: {addr1:?}");
 
         let (tx_sync_finished2, _) = tokio::sync::mpsc::channel(1);
-        let protocol2 = IrohSyncmanProtocol::new(AutomergeSyncman::new(doc2), tx_sync_finished2);
+        let protocol2 = create_protocol(doc2, tx_sync_finished2);
         let iroh2 = spawn_router(protocol2.clone()).await;
         let conn = iroh2
             .endpoint()
-            .connect(addr1, IrohSyncmanProtocol::ALPN)
+            .connect(addr1, IROH_SYNCMAN_ALPN)
             .await
             .unwrap();
 
@@ -246,17 +265,26 @@ mod tests {
         iroh1.shutdown().await.unwrap();
         iroh2.shutdown().await.unwrap();
 
-        assert_eq!(
-            doc_to_hashmap(&protocol1.syncman.lock().unwrap().doc()),
-            data
-        );
-        assert_eq!(
-            doc_to_hashmap(&protocol2.syncman.lock().unwrap().doc()),
-            data
-        );
+        assert_eq!(protocol1.adapter.dump().await, data);
+        assert_eq!(protocol2.adapter.dump().await, data);
     }
 
-    async fn spawn_router(protocol: IrohSyncmanProtocol) -> Router {
+    fn create_protocol(
+        doc: Automerge,
+        sync_finished: mpsc::Sender<()>,
+    ) -> IrohSyncmanProtocol<AutomergeSyncman, EmbeddedSyncmanAdapter<AutomergeSyncman>> {
+        IrohSyncmanProtocol::new(
+            EmbeddedSyncmanAdapter::new(AutomergeSyncman::new(doc)),
+            sync_finished,
+        )
+    }
+
+    async fn spawn_router<S, A>(protocol: IrohSyncmanProtocol<S, A>) -> Router
+    where
+        S: Syncman + Send + Sync + 'static,
+        S::Handle: Send + Sync,
+        A: SyncmanAdapter<S> + Send + Sync + 'static,
+    {
         Router::builder(
             Endpoint::builder()
                 .relay_mode(iroh::RelayMode::Disabled)
@@ -265,7 +293,7 @@ mod tests {
                 .await
                 .unwrap(),
         )
-        .accept(IrohSyncmanProtocol::ALPN, protocol)
+        .accept(IROH_SYNCMAN_ALPN, protocol)
         .spawn()
         .await
         .unwrap()

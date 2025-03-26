@@ -3523,6 +3523,7 @@ name = "syncman-network"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "automerge",
  "bincode",
  "iroh",
