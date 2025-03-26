@@ -1,3 +1,3 @@
 # Syncman
 
-Conflict-free Synchronization Protocol
+Conflict-free Synchronization Library
