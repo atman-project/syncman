@@ -1,3 +1,12 @@
 [workspace]
 members = ["syncman", "syncman-network"]
 resolver = "2"
+
+[workspace.package]
+license = "Apache-2.0"
+homepage = "https://github.com/atman-project"
+repository = "https://github.com/atman-project/syncman"
+
+[workspace.dependencies]
+syncman = { path = "./syncman" }
+syncman-network = { path = "./syncman-network" }
