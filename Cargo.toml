@@ -1,5 +1,5 @@
 [workspace]
-members = ["syncman", "syncman-network"]
+members = ["syncman"]
 resolver = "2"
 
 [workspace.package]
