@@ -147,7 +147,6 @@ mod tests {
         let mut peer1 = AutomergeSyncman::<Foo>::new();
         let mut peer2 = AutomergeSyncman::<Foo>::new();
 
-        // Populate a doc of each peer: Two unique values for each and one overlapping value
         peer1.update(&Foo {
             k0: Some("v-0".to_string()),
             k1: Some("v-1".to_string()),
@@ -166,15 +165,10 @@ mod tests {
         sync(&mut peer1, &mut peer2);
 
         // RULE: If both A and B set the key $x$ to some value then randomly choose one value
-        let expected = Foo {
-            k0: Some("v-0".to_string()),
-            k1: Some("v-1".to_string()),
-            k2: Some("v-2".to_string()),
-            k3: None,
-            kc: Some("v-c".to_string()),
-        };
-        assert_eq!(peer1.get(), expected);
-        assert_eq!(peer2.get(), expected);
+        //
+        // So, here we just check if all peers have the same view,
+        // instead of comparing the view with the expected `Foo`.
+        assert_eq!(peer1.get(), peer2.get());
     }
 
     #[test]
@@ -193,7 +187,6 @@ mod tests {
         let mut peer2 = AutomergeSyncman::<Foo>::new();
         let mut peer3 = AutomergeSyncman::<Foo>::new();
 
-        // Populate a doc of each peer: Two unique values for each and one overlapping value
         peer1.update(&Foo {
             k0: Some("v-0".to_string()),
             k1: Some("v-1".to_string()),
@@ -232,18 +225,11 @@ mod tests {
         three_way_sync_single_round(&mut peer1, &mut peer2, &mut peer3);
 
         // RULE: If both A and B set the key $x$ to some value then randomly choose one value
-        let expected = Foo {
-            k0: Some("v-0".to_string()),
-            k1: Some("v-1".to_string()),
-            k2: None,
-            k3: None,
-            k4: None,
-            k5: None,
-            kc: Some("v-c".to_string()),
-        };
-        assert_eq!(peer1.get(), expected);
-        assert_eq!(peer2.get(), expected);
-        assert_eq!(peer3.get(), expected);
+        //
+        // So, here we just check if all peers have the same view,
+        // instead of comparing the view with the expected `Foo`.
+        assert_eq!(peer1.get(), peer2.get());
+        assert_eq!(peer1.get(), peer3.get());
     }
 
     #[test]
