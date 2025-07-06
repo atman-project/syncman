@@ -246,6 +246,42 @@ mod tests {
         assert_eq!(peer3.get(), expected);
     }
 
+    #[test]
+    fn update_after_sync() {
+        #[derive(Reconcile, Hydrate, Clone, Debug, Eq, PartialEq)]
+        struct Foo {
+            k0: String,
+        }
+
+        let mut peer1 = AutomergeSyncman::<Foo>::new();
+        let mut peer2 = AutomergeSyncman::<Foo>::new();
+
+        let foo = Foo {
+            k0: "v-0".to_string(),
+        };
+        peer2.update(&foo);
+
+        sync(&mut peer1, &mut peer2);
+        assert_eq!(peer1.get(), foo);
+        assert_eq!(peer2.get(), foo);
+
+        let foo = Foo {
+            k0: "v-1".to_string(),
+        };
+        peer1.update(&foo);
+        sync(&mut peer1, &mut peer2);
+        assert_eq!(peer1.get(), foo);
+        assert_eq!(peer2.get(), foo);
+
+        let foo = Foo {
+            k0: "v-2".to_string(),
+        };
+        peer2.update(&foo);
+        sync(&mut peer1, &mut peer2);
+        assert_eq!(peer1.get(), foo);
+        assert_eq!(peer2.get(), foo);
+    }
+
     fn sync<Model>(peer1: &mut AutomergeSyncman<Model>, peer2: &mut AutomergeSyncman<Model>)
     where
         Model: Reconcile + Hydrate,
