@@ -65,6 +65,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dcfed56ad506cb2c684a14971b8861fdc3baaaae314b9e5f9bb532cbe3ba7a4f"
 
 [[package]]
+name = "approx"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f0e60b75072ecd4168020818c0107f2857bb6c4e64252d8d3983f6263b40a5c3"
+dependencies = [
+ "num-traits",
+]
+
+[[package]]
 name = "asn1-rs"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -172,6 +181,43 @@ dependencies = [
 ]
 
 [[package]]
+name = "automerge-test"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "de7ea146ca0a231d41d775775afbf7c8896d4cc07df85764416f93ca64f0e9e4"
+dependencies = [
+ "automerge",
+ "decorum",
+ "serde",
+ "serde_json",
+ "smol_str",
+]
+
+[[package]]
+name = "autosurgeon"
+version = "0.8.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bb09e782087199bfbea2848b7dc808a93eaaf9a185d2706a6efabc7e606fcb04"
+dependencies = [
+ "automerge",
+ "autosurgeon-derive",
+ "similar",
+ "thiserror 1.0.69",
+]
+
+[[package]]
+name = "autosurgeon-derive"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbf16fd191f2b254f0cc64783196f818ebe02c9c918deee82fe96fad07a72aa6"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.100",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "backon"
 version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -259,6 +305,17 @@ name = "bounded-integer"
 version = "0.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "102dbef1187b1893e6dfe05a774e79fd52265f49f214f6879c8ff49f52c8188b"
+
+[[package]]
+name = "bstr"
+version = "1.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "234113d19d0d7d613b40e86fb654acf958910802bcceab913a4f9e7cda03b1a4"
+dependencies = [
+ "memchr",
+ "regex-automata 0.4.9",
+ "serde",
+]
 
 [[package]]
 name = "bumpalo"
@@ -541,6 +598,18 @@ name = "data-encoding"
 version = "2.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "575f75dfd25738df5b91b8e43e14d44bda14637a58fae779fd2b064f8bf3e010"
+
+[[package]]
+name = "decorum"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "281759d3c8a14f5c3f0c49363be56810fcd7f910422f97f2db850c2920fde5cf"
+dependencies = [
+ "approx",
+ "num-traits",
+ "serde",
+ "serde_derive",
+]
 
 [[package]]
 name = "der"
@@ -3305,6 +3374,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "similar"
+version = "2.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbbb5d9659141646ae647b42fe094daf6c6192d1620870b449d9557f748b2daa"
+dependencies = [
+ "bstr",
+ "unicode-segmentation",
+]
+
+[[package]]
 name = "simple-dns"
 version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3515,6 +3594,8 @@ name = "syncman"
 version = "0.1.0"
 dependencies = [
  "automerge",
+ "automerge-test",
+ "autosurgeon",
 ]
 
 [[package]]

@@ -11,3 +11,7 @@ readme = "README.md"
 
 [dependencies]
 automerge = "0.6"
+autosurgeon = "0.8.7"
+
+[dev-dependencies]
+automerge-test = "0.5.0"
