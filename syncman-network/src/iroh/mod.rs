@@ -161,7 +161,7 @@ mod tests {
         net::{Ipv4Addr, SocketAddrV4},
     };
 
-    use automerge::{transaction::Transactable, Automerge, ReadDoc};
+    use automerge::{transaction::Transactable, AutoCommit, ReadDoc};
     use iroh::{protocol::Router, Endpoint};
     use syncman::automerge::AutomergeSyncman;
 
@@ -172,13 +172,13 @@ mod tests {
     #[tokio::test]
     async fn sync_empty_docs() {
         let (tx_sync_finished1, mut rx_sync_finished1) = tokio::sync::mpsc::channel(1);
-        let protocol1 = create_protocol(Automerge::new(), tx_sync_finished1);
+        let protocol1 = create_protocol(AutomergeSyncman::new(), tx_sync_finished1);
         let iroh1 = spawn_router(protocol1.clone()).await;
         let addr1 = iroh1.endpoint().node_addr().await.unwrap();
         println!("sync_empty_docs: addr1: {addr1:?}");
 
         let (tx_sync_finished2, _) = tokio::sync::mpsc::channel(1);
-        let protocol2 = create_protocol(Automerge::new(), tx_sync_finished2);
+        let protocol2 = create_protocol(AutomergeSyncman::new(), tx_sync_finished2);
         let iroh2 = spawn_router(protocol2.clone()).await;
         let conn = iroh2
             .endpoint()
@@ -198,8 +198,7 @@ mod tests {
 
     #[tokio::test]
     async fn sync_from_empty() {
-        let doc1 = Automerge::new();
-        let mut doc2 = Automerge::new();
+        let mut doc2 = AutoCommit::new();
         let data = populate_doc(
             &mut doc2,
             vec![
@@ -209,13 +208,13 @@ mod tests {
         );
 
         let (tx_sync_finished1, mut rx_sync_finished1) = tokio::sync::mpsc::channel(1);
-        let protocol1 = create_protocol(doc1, tx_sync_finished1);
+        let protocol1 = create_protocol(AutomergeSyncman::new(), tx_sync_finished1);
         let iroh1 = spawn_router(protocol1.clone()).await;
         let addr1 = iroh1.endpoint().node_addr().await.unwrap();
         println!("sync_from_empty: addr1: {addr1:?}");
 
         let (tx_sync_finished2, _) = tokio::sync::mpsc::channel(1);
-        let protocol2 = create_protocol(doc2, tx_sync_finished2);
+        let protocol2 = create_protocol(doc2.into(), tx_sync_finished2);
         let iroh2 = spawn_router(protocol2.clone()).await;
         let conn = iroh2
             .endpoint()
@@ -235,7 +234,7 @@ mod tests {
 
     #[tokio::test]
     async fn mutual_sync() {
-        let mut doc1 = Automerge::new();
+        let mut doc1 = AutoCommit::new();
         let mut data = populate_doc(
             &mut doc1,
             vec![
@@ -244,7 +243,7 @@ mod tests {
                 ("k-c".to_string(), "v-c".to_string()),
             ],
         );
-        let mut doc2 = Automerge::new();
+        let mut doc2 = AutoCommit::new();
         data.extend(populate_doc(
             &mut doc2,
             vec![
@@ -255,13 +254,13 @@ mod tests {
         ));
 
         let (tx_sync_finished1, mut rx_sync_finished1) = tokio::sync::mpsc::channel(1);
-        let protocol1 = create_protocol(doc1, tx_sync_finished1);
+        let protocol1 = create_protocol(doc1.into(), tx_sync_finished1);
         let iroh1 = spawn_router(protocol1.clone()).await;
         let addr1 = iroh1.endpoint().node_addr().await.unwrap();
         println!("addr1: {addr1:?}");
 
         let (tx_sync_finished2, _) = tokio::sync::mpsc::channel(1);
-        let protocol2 = create_protocol(doc2, tx_sync_finished2);
+        let protocol2 = create_protocol(doc2.into(), tx_sync_finished2);
         let iroh2 = spawn_router(protocol2.clone()).await;
         let conn = iroh2
             .endpoint()
@@ -280,13 +279,10 @@ mod tests {
     }
 
     fn create_protocol(
-        doc: Automerge,
+        syncman: AutomergeSyncman,
         sync_finished: mpsc::Sender<()>,
     ) -> IrohSyncmanProtocol<AutomergeSyncman, EmbeddedSyncmanAdapter<AutomergeSyncman>> {
-        IrohSyncmanProtocol::new(
-            EmbeddedSyncmanAdapter::new(AutomergeSyncman::new(doc)),
-            sync_finished,
-        )
+        IrohSyncmanProtocol::new(EmbeddedSyncmanAdapter::new(syncman), sync_finished)
     }
 
     async fn spawn_router<S, A>(protocol: IrohSyncmanProtocol<S, A>) -> Router
@@ -310,20 +306,16 @@ mod tests {
     }
 
     fn populate_doc(
-        doc: &mut Automerge,
+        doc: &mut AutoCommit,
         keyvalues: Vec<(String, String)>,
     ) -> HashMap<String, String> {
-        let mut fork = doc.fork();
-        let mut tx = doc.transaction();
         for (key, value) in keyvalues {
-            tx.put(automerge::ROOT, key, value).unwrap();
+            doc.put(automerge::ROOT, key, value).unwrap();
         }
-        tx.commit();
-        doc.merge(&mut fork).unwrap();
         doc_to_hashmap(doc)
     }
 
-    fn doc_to_hashmap(doc: &Automerge) -> HashMap<String, String> {
+    fn doc_to_hashmap(doc: &AutoCommit) -> HashMap<String, String> {
         let mut map = HashMap::new();
         for key in doc.keys(automerge::ROOT).collect::<Vec<_>>() {
             let (value, _) = doc.get(automerge::ROOT, &key).unwrap().unwrap();

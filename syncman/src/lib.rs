@@ -1,11 +1,19 @@
 use std::collections::HashMap;
 
+use autosurgeon::{Hydrate, Reconcile};
+
 pub mod automerge;
 
 pub trait Syncman {
     type Handle: SyncHandle;
 
-    fn initiate_sync(&self) -> Self::Handle;
+    fn update<Model>(&mut self, data: &Model)
+    where
+        Model: Reconcile;
+    fn get<Model>(&self) -> Model
+    where
+        Model: Hydrate;
+    fn initiate_sync(&mut self) -> Self::Handle;
     fn apply_sync(&mut self, handle: &mut Self::Handle, msg: &[u8]);
     // TODO: use generic type
     fn dump(&self) -> HashMap<String, String>;

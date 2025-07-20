@@ -1,4 +1,7 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
 use syncman::Syncman;
 
@@ -38,7 +41,7 @@ where
         self.syncman.lock().unwrap().apply_sync(handle, msg)
     }
 
-    async fn dump(&self) -> std::collections::HashMap<String, String> {
+    async fn dump(&self) -> HashMap<String, String> {
         self.syncman.lock().unwrap().dump()
     }
 }
