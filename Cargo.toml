@@ -1,17 +1,12 @@
-[package]
-name = "syncman"
-version = "0.1.0"
-authors = ["Youngjoon Lee"]
-edition = "2021"
-description = "Conflict-free Synchronization Library"
+[workspace]
+members = ["syncman", "syncman-network"]
+resolver = "2"
+
+[workspace.package]
 license = "Apache-2.0"
 homepage = "https://github.com/atman-project"
 repository = "https://github.com/atman-project/syncman"
-readme = "README.md"
 
-[dependencies]
-automerge = "0.6"
-autosurgeon = "0.8.7"
-
-[dev-dependencies]
-automerge-test = "0.5"
+[workspace.dependencies]
+syncman = { path = "./syncman" }
+syncman-network = { path = "./syncman-network" }
