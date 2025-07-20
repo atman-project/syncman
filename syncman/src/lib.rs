@@ -1,13 +1,14 @@
+use std::collections::HashMap;
+
 pub mod automerge;
 
-pub trait Syncman<Model> {
+pub trait Syncman {
     type Handle: SyncHandle;
 
-    fn update(&mut self, data: &Model);
-    fn get(&self) -> Model;
-    fn initiate_sync(&mut self) -> Self::Handle;
+    fn initiate_sync(&self) -> Self::Handle;
     fn apply_sync(&mut self, handle: &mut Self::Handle, msg: &[u8]);
-    fn dump(&mut self) -> Vec<u8>;
+    // TODO: use generic type
+    fn dump(&self) -> HashMap<String, String>;
 }
 
 pub trait SyncHandle {
