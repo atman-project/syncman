@@ -4,7 +4,7 @@ use automerge::{
     sync::{self, SyncDoc},
     AutoCommit, ReadDoc as _,
 };
-use autosurgeon::{hydrate, reconcile, Hydrate, Reconcile};
+use autosurgeon::{hydrate, reconcile, reconcile_prop, Hydrate, Reconcile};
 
 use crate::{SyncHandle, Syncman};
 
@@ -36,12 +36,27 @@ impl From<AutoCommit> for AutomergeSyncman {
 // TODO: Handle AutomergeError in all methods
 impl Syncman for AutomergeSyncman {
     type Handle = AutomergeSyncHandle;
+    type ObjectId = automerge::ObjId;
+    type Property = automerge::Prop;
 
     fn update<Model>(&mut self, data: &Model)
     where
         Model: Reconcile,
     {
         reconcile(&mut self.doc, data).unwrap();
+    }
+
+    fn root(&self) -> Self::ObjectId {
+        automerge::ROOT
+    }
+
+    fn update_prop<Obj, Prop, Model>(&mut self, obj: Obj, prop: Prop, value: &Model)
+    where
+        Obj: AsRef<Self::ObjectId>,
+        Prop: Into<Self::Property>,
+        Model: Reconcile,
+    {
+        reconcile_prop(&mut self.doc, obj, prop.into(), value).unwrap();
     }
 
     fn get<Model>(&self) -> Model
@@ -98,6 +113,42 @@ mod tests {
     use autosurgeon::{Hydrate, Reconcile};
 
     use super::*;
+
+    #[test]
+    fn update_and_get() {
+        #[derive(Reconcile, Hydrate, Clone, Debug, Eq, PartialEq)]
+        struct Foo {
+            b0: Bar,
+            b1: Bar,
+        }
+
+        #[derive(Reconcile, Hydrate, Clone, Debug, Eq, PartialEq)]
+        struct Bar {
+            k0: String,
+            k1: String,
+        }
+
+        let mut syncman = AutomergeSyncman::new();
+        let mut foo = Foo {
+            b0: Bar {
+                k0: "v-0".to_string(),
+                k1: "v-1".to_string(),
+            },
+            b1: Bar {
+                k0: "v-2".to_string(),
+                k1: "v-3".to_string(),
+            },
+        };
+        syncman.update(&foo);
+        assert_eq!(syncman.get::<Foo>(), foo);
+
+        foo.b1 = Bar {
+            k0: "v-4".to_string(),
+            k1: "v-5".to_string(),
+        };
+        syncman.update_prop(syncman.root(), "b1", &foo.b1);
+        assert_eq!(syncman.get::<Foo>(), foo);
+    }
 
     #[test]
     fn empty_docs() {

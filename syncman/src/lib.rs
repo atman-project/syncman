@@ -6,9 +6,17 @@ pub mod automerge;
 
 pub trait Syncman {
     type Handle: SyncHandle;
+    type ObjectId;
+    type Property;
 
     fn update<Model>(&mut self, data: &Model)
     where
+        Model: Reconcile;
+    fn root(&self) -> Self::ObjectId;
+    fn update_prop<Obj, Prop, Model>(&mut self, obj: Obj, prop: Prop, value: &Model)
+    where
+        Obj: AsRef<Self::ObjectId>,
+        Prop: Into<Self::Property>,
         Model: Reconcile;
     fn get<Model>(&self) -> Model
     where
