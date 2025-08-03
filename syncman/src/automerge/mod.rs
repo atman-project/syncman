@@ -151,6 +151,45 @@ mod tests {
     }
 
     #[test]
+    fn update_prop() {
+        #[derive(Reconcile, Hydrate, Clone, Debug, Eq, PartialEq)]
+        struct Foo {
+            k0: String,
+            k1: String,
+        }
+
+        let mut syncman = AutomergeSyncman::new();
+        let foo1 = Foo {
+            k0: "v-0".to_string(),
+            k1: "v-1".to_string(),
+        };
+        syncman.update_prop(syncman.root(), "f1", &foo1);
+        let mut foo2 = Foo {
+            k0: "v-2".to_string(),
+            k1: "v-3".to_string(),
+        };
+        syncman.update_prop(syncman.root(), "f2", &foo2);
+
+        assert_eq!(
+            syncman.get::<HashMap<String, Foo>>(),
+            HashMap::from([
+                ("f1".to_string(), foo1.clone()),
+                ("f2".to_string(), foo2.clone())
+            ])
+        );
+
+        foo2.k0 = "v-4".to_string();
+        syncman.update_prop(syncman.root(), "f2", &foo2);
+        assert_eq!(
+            syncman.get::<HashMap<String, Foo>>(),
+            HashMap::from([
+                ("f1".to_string(), foo1.clone()),
+                ("f2".to_string(), foo2.clone())
+            ])
+        );
+    }
+
+    #[test]
     fn empty_docs() {
         #[derive(Reconcile, Hydrate, Clone, Debug, Eq, PartialEq)]
         struct Foo(u64);
