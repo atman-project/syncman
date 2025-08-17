@@ -29,11 +29,16 @@ pub trait Syncman {
     where
         Model: Hydrate;
 
-    fn get_prop<Obj, Prop, Model>(&self, obj: Obj, prop: Prop) -> (Model, Self::ObjectId)
+    fn get_prop<Obj, Prop, Model>(&self, obj: Obj, prop: Prop) -> Model
     where
         Obj: AsRef<Self::ObjectId>,
         Prop: Into<Self::Property>,
         Model: Hydrate;
+
+    fn get_object_id<Obj, Prop>(&self, obj: Obj, prop: Prop) -> Self::ObjectId
+    where
+        Obj: AsRef<Self::ObjectId>,
+        Prop: Into<Self::Property>;
 
     fn initiate_sync(&mut self) -> Self::Handle;
 
