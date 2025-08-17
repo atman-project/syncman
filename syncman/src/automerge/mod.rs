@@ -4,7 +4,9 @@ use automerge::{
     sync::{self, SyncDoc},
     AutoCommit, ReadDoc as _,
 };
-use autosurgeon::{hydrate, reconcile, reconcile_prop, Hydrate, Reconcile};
+use autosurgeon::{
+    hydrate, hydrate_prop, reconcile, reconcile_insert, reconcile_prop, Hydrate, Reconcile,
+};
 
 use crate::{SyncHandle, Syncman};
 
@@ -59,11 +61,33 @@ impl Syncman for AutomergeSyncman {
         reconcile_prop(&mut self.doc, obj, prop.into(), value).unwrap();
     }
 
+    fn insert<Model>(&mut self, obj: Self::ObjectId, index: usize, value: &Model)
+    where
+        Model: Reconcile,
+    {
+        reconcile_insert(&mut self.doc, obj, index, value).unwrap();
+    }
+
     fn get<Model>(&self) -> Model
     where
         Model: Hydrate,
     {
         hydrate(&self.doc).unwrap()
+    }
+
+    fn get_prop<Obj, Prop, Model>(&self, obj: Obj, prop: Prop) -> (Model, Self::ObjectId)
+    where
+        Obj: AsRef<Self::ObjectId>,
+        Prop: Into<Self::Property>,
+        Model: Hydrate,
+    {
+        let prop = prop.into();
+        let (_, obj_id) = self
+            .doc
+            .get(obj.as_ref(), prop.clone())
+            .unwrap()
+            .expect("Property not found");
+        (hydrate_prop(&self.doc, obj.as_ref(), prop).unwrap(), obj_id)
     }
 
     fn initiate_sync(&mut self) -> Self::Handle {
@@ -190,10 +214,34 @@ mod tests {
     }
 
     #[test]
-    fn empty_docs() {
+    fn insert() {
         #[derive(Reconcile, Hydrate, Clone, Debug, Eq, PartialEq)]
-        struct Foo(u64);
+        struct Foo {
+            numbers: Vec<u64>,
+        }
 
+        let mut syncman = AutomergeSyncman::new();
+        let foo = Foo {
+            numbers: vec![0, 1, 2],
+        };
+        syncman.update(&foo);
+
+        let (numbers, obj) = syncman.get_prop::<_, _, Vec<u64>>(&syncman.root(), "numbers");
+        assert_eq!(numbers, foo.numbers);
+
+        syncman.insert(obj.clone(), 0, &10u64);
+        syncman.insert(obj, 2, &20u64);
+
+        assert_eq!(
+            syncman.get::<Foo>(),
+            Foo {
+                numbers: vec![10, 0, 20, 1, 2],
+            }
+        );
+    }
+
+    #[test]
+    fn empty_docs() {
         let mut peer1 = AutomergeSyncman::new();
         let mut peer2 = AutomergeSyncman::new();
 
