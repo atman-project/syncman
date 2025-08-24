@@ -114,13 +114,23 @@ impl Syncman for AutomergeSyncman {
         self.doc.merge(&mut handle.doc).unwrap();
     }
 
-    fn dump(&self) -> HashMap<String, String> {
+    fn to_map(&self) -> HashMap<String, String> {
         let mut map = HashMap::new();
         for key in self.doc.keys(automerge::ROOT) {
             let (value, _) = self.doc.get(automerge::ROOT, &key).unwrap().unwrap();
             map.insert(key, value.to_string());
         }
         map
+    }
+
+    fn save(&mut self) -> Vec<u8> {
+        self.doc.save()
+    }
+
+    fn load(data: &[u8]) -> Self {
+        Self {
+            doc: AutoCommit::load(data).unwrap(),
+        }
     }
 }
 
@@ -246,6 +256,24 @@ mod tests {
                 numbers: vec![10, 0, 20, 1, 2],
             }
         );
+    }
+
+    #[test]
+    fn save_and_load() {
+        #[derive(Reconcile, Hydrate, Clone, Debug, Eq, PartialEq)]
+        struct Foo {
+            k0: String,
+        }
+
+        let mut syncman = AutomergeSyncman::new();
+        let foo = Foo {
+            k0: "v-0".to_string(),
+        };
+        syncman.update(&foo);
+
+        let data = syncman.save();
+        let syncman = AutomergeSyncman::load(&data);
+        assert_eq!(syncman.get::<Foo>(), foo);
     }
 
     #[test]

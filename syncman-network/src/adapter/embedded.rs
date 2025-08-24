@@ -41,7 +41,7 @@ where
         self.syncman.lock().unwrap().apply_sync(handle, msg)
     }
 
-    async fn dump(&self) -> HashMap<String, String> {
-        self.syncman.lock().unwrap().dump()
+    async fn to_map(&self) -> HashMap<String, String> {
+        self.syncman.lock().unwrap().to_map()
     }
 }

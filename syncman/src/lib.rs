@@ -45,7 +45,10 @@ pub trait Syncman {
     fn apply_sync(&mut self, handle: &mut Self::Handle, msg: &[u8]);
 
     // TODO: use generic type
-    fn dump(&self) -> HashMap<String, String>;
+    fn to_map(&self) -> HashMap<String, String>;
+
+    fn save(&mut self) -> Vec<u8>;
+    fn load(data: &[u8]) -> Self;
 }
 
 pub trait SyncHandle {

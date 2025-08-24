@@ -192,8 +192,8 @@ mod tests {
         iroh1.shutdown().await.unwrap();
         iroh2.shutdown().await.unwrap();
 
-        assert!(protocol1.adapter.dump().await.is_empty());
-        assert!(protocol2.adapter.dump().await.is_empty());
+        assert!(protocol1.adapter.to_map().await.is_empty());
+        assert!(protocol2.adapter.to_map().await.is_empty());
     }
 
     #[tokio::test]
@@ -228,8 +228,8 @@ mod tests {
         iroh1.shutdown().await.unwrap();
         iroh2.shutdown().await.unwrap();
 
-        assert_eq!(protocol1.adapter.dump().await, data);
-        assert_eq!(protocol2.adapter.dump().await, data);
+        assert_eq!(protocol1.adapter.to_map().await, data);
+        assert_eq!(protocol2.adapter.to_map().await, data);
     }
 
     #[tokio::test]
@@ -274,8 +274,8 @@ mod tests {
         iroh1.shutdown().await.unwrap();
         iroh2.shutdown().await.unwrap();
 
-        assert_eq!(protocol1.adapter.dump().await, data);
-        assert_eq!(protocol2.adapter.dump().await, data);
+        assert_eq!(protocol1.adapter.to_map().await, data);
+        assert_eq!(protocol2.adapter.to_map().await, data);
     }
 
     fn create_protocol(
