@@ -8,6 +8,7 @@ pub trait Syncman {
     type Handle: SyncHandle;
     type ObjectId;
     type Property;
+    type ActorId: for<'a> From<&'a [u8; 16]>;
 
     fn update<Model>(&mut self, data: &Model)
     where

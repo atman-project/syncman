@@ -21,6 +21,12 @@ impl AutomergeSyncman {
             doc: AutoCommit::new(),
         }
     }
+
+    pub fn new_with_actor(actor: automerge::ActorId) -> Self {
+        Self {
+            doc: AutoCommit::new().with_actor(actor),
+        }
+    }
 }
 
 impl Default for AutomergeSyncman {
@@ -40,6 +46,7 @@ impl Syncman for AutomergeSyncman {
     type Handle = AutomergeSyncHandle;
     type ObjectId = automerge::ObjId;
     type Property = automerge::Prop;
+    type ActorId = automerge::ActorId;
 
     fn update<Model>(&mut self, data: &Model)
     where
@@ -154,6 +161,13 @@ mod tests {
     use autosurgeon::{Hydrate, Reconcile};
 
     use super::*;
+
+    #[test]
+    fn new_with_actor() {
+        let actor_id: <AutomergeSyncman as Syncman>::ActorId = [0u8; 16].into();
+        let syncman = AutomergeSyncman::new_with_actor(actor_id.clone());
+        assert_eq!(syncman.doc.get_actor(), &actor_id);
+    }
 
     #[test]
     fn update_and_get() {
